@@ -1,0 +1,187 @@
+---
+title: "prelimgraphs"
+output: html_document
+---
+
+Data source: https://databank.worldbank.org/reports.aspx?source=2&series=AG.LND.FRST.ZS&country=#
+
+```{r}
+library(ggplot2)
+```
+
+## Plot yearly CO2 emissions in the US over time
+```{r}
+x <- read.csv("co2.csv", stringsAsFactors = F)
+
+# Make the data long
+xx <- reshape(x, 
+              varying = names(x)[5:length(names(x))], 
+              timevar = "year", 
+              v.names = "emissions", 
+              direction = "long", 
+              times = names(x)[5:length(names(x))])
+
+# Clean up year column
+xx$year <- gsub(pattern = "\\..*", 
+                replacement = "", 
+                x = xx$year)
+xx$year <- as.numeric(gsub(pattern = "X", 
+                           replacement = "", 
+                           x = xx$year))
+
+# Delete the row names
+rownames(xx) <- NULL
+
+# For now, focus on the US
+xxUSA <- xx[xx$Country.Code == "USA", ]
+```
+
+```{r}
+p1 <- ggplot(data = xxUSA, aes(x = year, y = emissions)) + 
+  geom_line() + geom_point() + ggtitle("Yearly CO2 Emissions in the US") + 
+  labs(y = "emissions (metric tons per capita)")
+p1
+```
+
+```{r}
+# Compare the US to other current/rising superpowers: Russia, China, and India
+xxRUS <- xx[xx$Country.Code == "RUS", ]
+xxCHN <- xx[xx$Country.Code == "CHN", ]
+xxIND <- xx[xx$Country.Code == "IND", ]
+
+# Make individual graphs for each of these countries
+p2 <- ggplot(data = xxRUS, aes(x = year, y = emissions)) + 
+  geom_line() + geom_point() + ggtitle("Yearly CO2 Emissions in Russia") + 
+  labs(y = "emissions (metric tons per capita)")
+p2
+
+p3 <- ggplot(data = xxCHN, aes(x = year, y = emissions)) + 
+  geom_line() + geom_point() + ggtitle("Yearly CO2 Emissions in China") + 
+  labs(y = "emissions (metric tons per capita)")
+p3
+
+p4 <- ggplot(data = xxIND, aes(x = year, y = emissions)) + 
+  geom_line() + geom_point() + ggtitle("Yearly CO2 Emissions in India") + 
+  labs(y = "emissions (metric tons per capita)")
+p4
+
+# Overlay these graphs for the sake of comparison
+
+p5 <- ggplot(data = xxUSA, aes(x = year, y = emissions)) + geom_line()
+p5 + geom_line(data = xxRUS, color = "red") + 
+  geom_line(data = xxIND, color = "blue") + 
+  geom_line(data = xxCHN, color = "green") +
+  ggtitle("Yearly CO2 Emissions") + 
+  labs(y = "emissions (metric tons per capita)")
+```
+black = USA; red = Russia; blue = India; green = China
+
+## Composition of CO2 Emissions over time
+```{r}
+z <- read.csv("co2_pct.csv", stringsAsFactors = FALSE)
+
+# Function to convert time series data into wide format and clean up data and
+# column names
+data_clean <- function(x, outname, pattern) {
+  # Make the data long
+  xx <- reshape(x, 
+                varying = names(x)[5:length(names(x))], 
+                timevar = "year", 
+                v.names = outname, 
+                direction = "long", 
+                times = names(x)[5:length(names(x))])
+  
+  # Clean up year column
+  xx$year <- gsub(pattern = "\\..*", replacement = "", x = xx$year)
+  xx$year <- as.numeric(gsub(pattern = "X", replacement = "", x = xx$year))
+  
+  # Delete the row names
+  rownames(xx) <- NULL
+  
+  # Delete few rows of junk at the end
+  s.inds <- grepl(pattern = pattern, x = unique(xx[, 1]))
+  xx <- xx[!(xx[, 1] %in% unique(xx[, 1])[!s.inds]),]
+  xx <- xx[xx[, 1] != "",]
+  
+  # Delete the indicator column
+  xx[, 1] <- NULL
+  
+  # Recode Missing Values
+  xx$pct[xx$pct == ""] <- NA
+  xx$pct <- as.numeric(xx$pct)
+  
+  return(xx)
+}
+
+zz <- data_clean(z, "pct", "CO2") 
+
+# For now, focus on the US
+zzUSA <- zz[zz$Country.Code == "USA",]
+```
+
+```{r}
+# Legend names
+zzUSA$Series.Code <- as.factor(zzUSA$Series.Code)
+levels(zzUSA$Series.Code) <- 
+  c("Building", "Electricity+Heat", "Manufacturing", "Other", "Transportation")
+
+# Make a stacked line plot
+ggplot(zzUSA, aes(x = year, y = pct, fill = Series.Code)) + 
+  geom_area() + 
+  ggtitle("CO2 emissions per capita by composition")
+```
+## Yearly electricity production by source
+```{r}
+e <- read.csv("energy.csv", stringsAsFactors = FALSE)
+ee <- data_clean(e, "pct", "Electricity")
+
+eeUSA <- ee[ee$Country.Code == "USA",]
+```
+
+```{r}
+# Legend names
+eeUSA$Series.Code <- as.factor(eeUSA$Series.Code)
+levels(eeUSA$Series.Code) <- 
+  c("Coal", "Hydro", "Natural Gas", "Nuclear", "Oil", "Renewable")
+
+# Make a stacked line plot
+ggplot(eeUSA, aes(x = year, y = pct, fill = Series.Code)) + 
+  geom_area() + 
+  ggtitle("Electricity production by composition")
+```
+
+## Correlation between per capital CO2 emissions and % forest area
+```{r}
+y <- read.csv("forest.csv", stringsAsFactors = F)
+
+# Make the data long
+yy <- reshape(y, 
+              varying = names(y)[5:length(names(y))], 
+              timevar = "year", 
+              v.names = "pct area", 
+              direction = "long", 
+              times = names(y)[5:length(names(y))])
+
+# Clean up year column
+yy$year <- gsub(pattern = "\\..*", 
+                replacement = "", 
+                x = yy$year)
+yy$year <- as.numeric(gsub(pattern = "X", 
+                           replacement = "", 
+                           x = yy$year))
+
+# Delete the row names
+rownames(yy) <- NULL
+
+# For now, focus on the US
+yyUSA <- yy[yy$Country.Code == "USA", ]
+```
+
+```{r}
+plot(xxUSA[xxUSA$year %in% yyUSA$year,6], 
+     yyUSA$`pct area`, 
+     xlab = "CO2 Emissions (metric tons per capita)", 
+     ylab = "Percent forest area")
+```
+
+Goal: find indicators with similar numbers of measured values
