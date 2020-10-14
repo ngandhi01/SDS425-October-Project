@@ -60,6 +60,7 @@ xx05 <- reshape(xx05,
                 idvar = c("Country.Name", "Country.Code"), 
                 timevar = "Series.Code", 
                 direction = "wide")
+names(xx05) <- gsub(pattern = "value.", replacement = "", x = names(xx05))
 ```
 
 ```{r}
@@ -74,6 +75,23 @@ for (i in 1:59) {
         main = names(xx05[, -c(1, 2)])[i],
         xaxt = "n",
         yaxt = "n")
+}
+dev.off()
+```
+
+```{r}
+# Another way to plot (plot 1 plot per page)
+# Make large pairs plot
+pdf("pairsplot3", width = 5, height = 5)
+for (i in 1:60) {
+  par(par.save)
+  for (j in 1:60) {
+    plot(xx05[, 2 + i], 
+         xx05[, 2 + j], 
+         xlab = names(xx05)[2 + i], 
+         ylab = names(xx05)[2 + j],
+         main = paste(names(xx05)[2 + j], "vs.", names(xx05)[2 + i]))
+  }
 }
 dev.off()
 ```
