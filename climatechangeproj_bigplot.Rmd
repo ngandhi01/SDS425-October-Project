@@ -1,0 +1,73 @@
+---
+title: "prelimgraphs"
+output: html_document
+---
+
+Data source: https://databank.worldbank.org/reports.aspx?source=2&series=AG.LND.FRST.ZS&country=#
+
+```{r}
+library(ggplot2)
+library(GGally)
+```
+
+## Composition of CO2 Emissions over time
+```{r}
+# Read in the data
+x <- read.csv(paste0(getwd(),"/Data_Extract_Full/data.csv"), 
+              stringsAsFactors = FALSE)
+
+# Make the data long
+xx <- reshape(x, 
+              varying = names(x)[5:ncol(x)], 
+              timevar = "year", 
+              v.names = "value", 
+              direction = "long", 
+              times = names(x)[5:ncol(x)])
+
+# Clean up year column
+xx$year <- gsub(pattern = "\\..*", replacement = "", x = xx$year)
+xx$year <- as.numeric(gsub(pattern = "X", replacement = "", x = xx$year))
+
+# Delete the row names
+rownames(xx) <- NULL
+
+# Delete few rows of junk at the end
+xx <- xx[xx$Country.Name != "",]
+
+# Delete the indicator column
+xx[, 1] <- NULL
+
+# Delete id column
+xx$id <- NULL
+
+# Recode Missing Values
+xx$value <- as.numeric(xx$value)
+```
+
+```{r}
+# Focus on a single year (2005)
+xx05 <- xx[xx$year == 2005, ]
+
+# Change to "wide" format
+xx05$year <- NULL
+xx05 <- reshape(xx05, 
+                idvar = c("Country.Name", "Country.Code"), 
+                timevar = "Series.Code", 
+                direction = "wide")
+```
+
+```{r}
+# Make large pairs plot
+pdf("pairsplot2", width = 50, height = 5)
+for (i in 1:59) {
+  pairs(x = xx05[, -c(1, 2)], 
+        labels = names(x)[-c(1, 2)], 
+        horInd = i, 
+        verInd = (i+1):ncol(xx05[, -c(1, 2)]), 
+        gap = 0,
+        main = names(xx05[, -c(1, 2)])[i],
+        xaxt = "n",
+        yaxt = "n")
+}
+dev.off()
+```
