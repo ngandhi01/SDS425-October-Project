@@ -34,6 +34,12 @@ rownames(xx) <- NULL
 # Delete few rows of junk at the end
 xx <- xx[xx$Country.Name != "",]
 
+# Save the time series variables and their descriptions
+nms <- unique(xx[, 1:2])
+
+# Save as .csv
+write.csv(nms, 'varnames.csv')
+
 # Delete the indicator column
 xx[, 1] <- NULL
 
