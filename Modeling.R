@@ -64,21 +64,43 @@ datawide <- function(x){
 #                                nvmax = 5,
 #                                method = "seqrep")
 
-full.world.model <- lm(world_data_wide$value.WLD.AVG.TEMP.YEARLY ~., 
-                       data = world_data_wide)
+# Ask Elena about this 
+summary(lm(value.WLD.TEMP.ANOMALY ~. - year, data = world_data_wide))
 
-# Theoretically this model should work, however it seems to be running into
-# an error with colinearity
+full.world.model <- lm(value.WLD.TEMP.ANOMALY ~ value.IS.AIR.GOOD.MT.K1 + 
+                         value.IS.AIR.PSGR + value.SP.DYN.LE00.FE.IN + 
+                         value.SP.DYN.LE00.MA.IN + value.SM.POP.REFG + 
+                         value.SL.TLF.CACT.FE.ZS +value.SL.TLF.CACT.MA.ZS + 
+                         value.SL.UEM.TOTL.ZS + value.EN.POP.DNST + 
+                         value.SP.POP.GROW + value.AG.LND.FRST.ZS + 
+                         value.SP.URB.TOTL.IN.ZS + value.AG.SRF.TOTL.K2 + 
+                         value.AG.PRD.CROP.XD + value.AG.PRD.FOOD.XD + 
+                         value.AG.PRD.LVSK.XD + value.SP.RUR.TOTL + 
+                         value.SP.URB.TOTL + value.AG.LND.AGRI.ZS + 
+                         value.AG.LND.ARBL.ZS + value.AG.LND.ARBL.HA.PC + 
+                         value.EN.ATM.CO2E.KT, data = world_data_wide)
+
+# combine several levels into one 
+
+# check value.EN.ATM.CO2E.PC as this was creating problems 
+
 summary(full.world.model)
 
-# This function is supposed to check for linear dependence; it doesn't detect
-# any however. Ask Elena about this!
-detect.lindep(world_data_wide)
+# Forward stepwise regression
+step.world.model <- stepAIC(full.world.model, direction = "forward")
+summary(step.world.model)
 
-# # Forward stepwise regression 
-# step.world.model <- stepAIC(full.world.model, direction = "forward")
+# Backward stepwise regression
+step.world.model <- stepAIC(full.world.model, direction = "backward")
+summary(step.world.model)
 
+# Both
+step.world.model <- stepAIC(full.world.model, direction = "both")
+summary(step.world.model)
 
+# Now that we've found these significant predictors, let's see their predictions
+# at a country level 
+  
 # Extract only information about the US and repeat the above 
 US_data <- wb_data_long[wb_data_long$Country.Name == "United States",]
 US_data_wide <- datawide(US_data)
