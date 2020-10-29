@@ -15,7 +15,8 @@ library(GGally)
 # Read in the data
 x <- read.csv(paste0(getwd(),"/Data_Extract_Full/data.csv"), 
               stringsAsFactors = FALSE)
-x <- read.csv("/Users/jessicapevner/Downloads/Data_Extract_full.csv")
+x <- read.csv(paste0(getwd(), "/Data_Extract_Full/data.csv"), 
+              stringsAsFactors = FALSE)
 # Make the data long
 xx <- reshape(x, 
               varying = names(x)[5:ncol(x)], 
@@ -48,7 +49,7 @@ worlddat <- xx[xx$Country.Name == "World",]
 worlddat
 
 
-temps <- read.csv("/Users/jessicapevner/Downloads/data.csv")
+temps <- read.csv("data.csv")
 colnames(temps) <- c("year", "tempChange")
 temps <- temps[5:nrow(temps),]
 temps$year <- as.numeric(temps$year) + 1879 # workaround
