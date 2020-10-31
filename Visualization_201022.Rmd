@@ -1,0 +1,259 @@
+---
+title: "Data Visualization"
+author: "Ruchira Ray"
+date: "October 21, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+This script shows some visualizations that answer questions we have about climate change. We consider data from 1991 and focus on the US, China, Germany, the UK, Brazil, and India
+
+## Read in the data
+```{r}
+# Load in data
+x <- read.csv(paste0(getwd(), "/cleaning/final/data_long.csv"), 
+              stringsAsFactors = FALSE)
+
+# Look at countries specified above
+countries <- c("United States", 
+               "China", 
+               "Germany", 
+               "United Kingdom",
+               "Brazil", 
+               "India",
+               "World")
+xx <- x[x$Country.Name %in% countries, ]
+
+# Read in wide data
+countries2 <- c("US", "China", "Germany", "UK", "Brazil", "India", "world")
+wide <- vector(mode = "list", length = length(countries))
+for(i in 1:length(countries)) {
+    wide[[i]] <- read.csv(paste0(getwd(), "/cleaning/final/", countries2[i], "_data_wide.csv"), 
+               stringsAsFactors = FALSE)
+}
+```
+
+## Temperature Data Visualization
+### Comparing country temperature to world temperature
+First, we compared the time series of the yearly world temperature (which is the yearly temperature averaged over countries) to the yearly country temperature
+```{r}
+# Plot 1: time series on top of each other
+codes <- c("TEMP.YEARLY", "WLD.AVG.TEMP.YEARLY")
+trunc <- xx[xx$Series.Code %in% codes, ]
+trunc2 <- trunc[trunc$Country.Name != "World", ]
+
+p0 <- ggplot(data = trunc2, mapping = aes(x = year, y = value)) + 
+  geom_line() + 
+  facet_wrap(~ Country.Name, scales = "free_y") +
+  ggtitle("Surface Temperature over Time") + 
+  ylab("Temp (Celsius)") + 
+  theme_classic()
+p0
+```
+This plot isn't very informative because some countries have a higher baseline temperature based on location (i.e. Brazil and India are in more tropical climates compared to other countries). However, the average world temperature seems to be steadily increasing. On the country level (for these countries), the surface temperatures are relatively stable. \newline
+
+
+Perhaps the changes in surface temperature would be more revealing. 
+```{r, warning=FALSE}
+# # Plot 2: subtracted time series
+# trunc$diff <- ave(trunc$value, factor(trunc$Country.Name), 
+#                   FUN = function(x) c(NA, diff(x)))
+# 
+# p2 <- ggplot(data = trunc, mapping = aes(x = year, y = diff)) + 
+#   geom_line(aes(color = Country.Name, size = Series.Code)) + 
+#   scale_size_manual(values = c(0.5, 1)) + 
+#   ggtitle("Surface Temperature Difference over Time") + 
+#   ylab("Temp[t]-Temp[t-1] (Celsius)") + 
+#   theme_classic()
+# p2
+```
+There does not appear to be a systematic trend in the differences, supporting the previous plot showing that the temperatures are stable. Moreover, these differences oscillate around 0, so there is not a systematic warming/cooling. However, some surface temperatures are more stable than others. For example, the surface temperatures of Germany and the UK are more unstable. \newline
+
+### Comparing country temperature to world temperature anomalies
+The world temperature anonmalies are the difference between the world's surface temperature for that year and the average world surface temperature from 1901-2000. The average was calculated in a more sophisticated way than a simple average over countries. \newline
+
+Also plot the single time series of the world average temperature to see if there is a trend
+```{r}
+# Plot 1: time series
+codes <- c("WLD.AVG.TEMP.YEARLY", "WLD.TEMP.ANOMALY")
+trunc.a <- xx[xx$Series.Code %in% codes, ]
+
+p1 <- ggplot(data = trunc.a, mapping = aes(x = year, y = value)) + 
+  geom_line() + 
+  facet_wrap(~ Series.Code, scales = "free_y") + 
+  ggtitle("World Surface Temperature Anomalies over Time") +
+  ylab("Temperature Anomalies (Celsius)") + 
+  theme_classic()
+p1
+```
+
+Note that the starting anomaly was above 0 and has kept rising, indicating that the global surface temperature has been deviating upward from the 20th century average. Compared to a baseline, there is evidence that the global temperatures have been increasing long term. \newline
+
+To further examine the relationship between the absolute average world temperature and its fluctiations, we plotted them against each other
+```{r, warning=FALSE}
+p4 <- 
+  ggplot(data = wide[[7]], 
+         mapping = aes(x = year, 
+                       y = value.WLD.TEMP.ANOMALY)) +
+  geom_point(aes(color = value.WLD.AVG.TEMP.YEARLY)) +
+  scale_color_gradient(low = "blue", high = "red") +
+  ggtitle("Temperature anomalies vs. surface temperature") + 
+  theme_classic()
+p4
+```
+From the scale on the x-axis, the average temperature does not change that much to be distinct on the time series, but a higher surface temperature is associated with higher (positive) temperature anomalies (which makes sense). Furthermore, the colors tell us that this upward trend is also positively correlated with the year (i.e. both anomalies and absolute temperature increase with year). \newline
+
+It would also be good to see if this trend is apparent on the country level (it is less apparent if the upward trend will remain)
+```{r, warning = FALSE}
+for (i in 1:(length(countries)-1)) {
+  trunc <- merge(wide[[i]][, c("year", "value.TEMP.YEARLY")], 
+                 wide[[7]][, c("year", "value.WLD.TEMP.ANOMALY")],
+                 by = "year")
+  # trunc <- xx[xx$Series.Code == "TEMP.YEARLY", ]
+  # trunc2 <- trunc[trunc$Country.Name == countries[i], ]
+  # trunc2 <- rbind(trunc2, xx[xx$Series.Code == "WLD.TEMP.ANOMALY", ])
+  # 
+  # trunc2$Country.Name <- NULL
+  # trunc2$Country.Code <- NULL
+  # trunc2$X <- NULL
+  # 
+  # trunc2 <- reshape(trunc2, 
+  #                   idvar = "year", 
+  #                   timevar = "Series.Code", 
+  #                   direction = "wide")
+  
+  print(ggplot(data = trunc, 
+           mapping = aes(x = year, y = value.WLD.TEMP.ANOMALY)) +
+    geom_point(aes(color = value.TEMP.YEARLY)) +
+    scale_color_gradient(low="blue", high="red") +
+    ggtitle(paste("Temperature anomalies vs.", 
+                  countries[i], 
+                  "surface temperature")) +
+    theme_classic())
+}
+```
+Each country plot displays the same relationships as the world plot: yearly surface temperature increases at the country level are associated with increased world surface temperature anomalies. Furthermore, these increases are happening over time. However, the strength and magnitude of the relationship is not equal in all countries. China, Germany, and India hav a weaker relationship whereas Brazil has a stronger one
+
+## Emissions data visualization
+### Time evolution of emissions
+```{r, warning=FALSE}
+trunc <- xx[xx$Series.Code == "EN.ATM.CO2E.KT", ]
+
+p6 <- 
+  ggplot(data = trunc[trunc$Country.Name != "World", ], 
+         mapping = aes(x = year, y = value)) + 
+  geom_line(aes(color = Country.Name)) +  
+  ggtitle("CO2 emissions over Time") + 
+  ylab("CO2 Emissions (kt)") + 
+  theme_classic()
+p6
+```
+Germany and the UK have steadily declining emissions, while China's emissions have increased. To determine if these changes are a reflection of population increases or increases in emissions, we can plot per capita emissions
+```{r,warning=FALSE}
+# # Plot 1: per capita emissions
+# trunc <- xx[xx$Series.Code == "EN.ATM.CO2E.PC", ]
+# 
+# p7 <- 
+#   ggplot(data = trunc[trunc$Country.Name != "World", ], 
+#          mapping = aes(x = year, y = value)) + 
+#   geom_line(aes(color = Country.Name)) +  
+#   ggtitle("Per capita CO2 emissions over Time") + 
+#   ylab("CO2 Emissions (metric tons per capita)") + 
+#   theme_classic()
+# p7
+```
+While per capita emissions are more stable, they are increasing in China, India, and Brazil.
+
+### Emissions represenation
+Say something like USA is x% of population and produces y% of emissions
+```{r}
+# TODO
+```
+
+### Relationship between temperature and emissions
+```{r, warning=FALSE}
+for (i in 1:(length(countries)-1)) {
+  trunc <- xx[xx$Series.Code == "EN.ATM.CO2E.KT", ]
+  trunc2 <- trunc[trunc$Country.Name == countries[i], ]
+  trunc2 <- rbind(trunc2, xx[xx$Series.Code == "WLD.TEMP.ANOMALY", ])
+  
+  trunc2$Country.Name <- NULL
+  trunc2$Country.Code <- NULL
+  trunc2$X <- NULL
+  
+  trunc2 <- reshape(trunc2, 
+                    idvar = "year", 
+                    timevar = "Series.Code", 
+                    direction = "wide")
+  
+  print(ggplot(data = trunc2, 
+           mapping = aes(x = value.EN.ATM.CO2E.KT, y = value.WLD.TEMP.ANOMALY))+
+    geom_point(aes(color = year)) +
+    scale_color_gradient(low="blue", high="red") +
+    ggtitle(paste("Temperature anomalies vs.", 
+                  countries[i], 
+                  "CO2 Emissions")) +
+    theme_classic())
+}
+```
+Emissions and anomalies are correlated differently according to country. In some countries there is a positive relationship (China, Brazil, India) over time. In other countries (USA) the relationships is weak. In other countries (Germany, UK) the relationship is negative with emissions decreasing over time while temperature goes up.
+
+### Relationship between temperature and other indicators
+```{r, warning=FALSE}
+inds <- c("IS.AIR.GOOD.MT.K1", 
+          "IS.RRS.GOOD.MT.K6", 
+          "SP.POP.GROW", 
+          "SP.DYN.LE00.IN", 
+          "AG.PRD.CROP.XD")
+names <- c("Air freight", 
+           "Rail freight", 
+           "Poulation growth", 
+           "Renewable energy production", 
+           "Life expectancy", 
+           "Crop Production Index")
+
+for (a in 1:length(inds)) {
+  for (i in 1:(length(countries)-1)) {
+    trunc <- xx[xx$Series.Code == inds[a], ]
+    trunc2 <- trunc[trunc$Country.Name == countries[i], ]
+    trunc2 <- rbind(trunc2, xx[xx$Series.Code == "WLD.TEMP.ANOMALY", ])
+    
+    trunc2$Country.Name <- NULL
+    trunc2$Country.Code <- NULL
+    trunc2$X <- NULL
+    
+    trunc2 <- reshape(trunc2, 
+                      idvar = "year", 
+                      timevar = "Series.Code", 
+                      direction = "wide")
+    names(trunc2) <- c("year", "v1", "v2")
+    print(ggplot(data = trunc2, 
+                 mapping = aes(x = v1, y = v2)) +
+            geom_point(aes(color = year)) +
+            scale_color_gradient(low="blue", high="red") +
+            ggtitle(paste("Temperature anomalies vs.", 
+                          countries[i], 
+                          names[a])) +
+            theme_classic())
+  }
+}
+```
+Moderate positive correlation: air freight, renewable energy production, life expectancy \newline
+Weak correlation: Rail freight (except for India, which is more stronly positively correlated) \newline
+Moderate negative correlation: population growth (except for UK, which is positive) \newline
+
+Overall, it seems like everything is just increasing?
+---------------------------------------------------------
+### Lag and autocorrelation plots
+
+### Compare with location
+TODO: Find location data (less complicated than latitute/longitute)
+Maybe hardcode region or biome
+
+### Compare with existing temp trends
+
+### Time series corresponding with important climate change related laws/administrations - do these events have possible impact?
