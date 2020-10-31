@@ -1,0 +1,102 @@
+---
+title: "Data Visualization"
+author: "Ruchira Ray"
+date: "October 31, 2020"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+This script shows some visualizations that answer questions we have about climate change. We consider data from 1991 and focus on the US, China, Germany, the UK, Brazil, and India
+
+## Read in the data
+```{r}
+# Load in country level data
+wide <- read.csv(paste0(getwd(), "/cleaning/final/country_aggregated.csv"), 
+                stringsAsFactors = FALSE)
+wide2 <- wide[wide$Country.Name != "world", ]
+```
+
+## Temperature Data Visualization
+### Country level surface temperature difference
+```{r}
+p1 <- ggplot(data = wide, mapping = aes(x = Country.Name, y = temp.diff)) +
+  geom_violin(mapping = aes(fill = Country.Name)) +
+  geom_boxplot(width = 0.1) + 
+  labs(fill = "Country", x = "Country", y = "Temperature Difference") + 
+  ggtitle("Temperature difference distribution over countries") +
+  theme_classic()
+p1
+
+ggsave(filename = paste0(getwd(), "/plots/tempdiff_vln.tiff"), 
+       plot = p1, 
+       width = 6, 
+       height = 4, 
+       units = "in")
+```
+
+### Relationship between temperature and temperature differences
+```{r}
+p2 <- ggplot(data = wide, mapping = aes(x = year, y = TEMP.YEARLY)) +
+  geom_line() +
+  geom_point(mapping = aes(color = temp.diff)) + 
+  scale_color_gradient(low = "blue", high = "red") +
+  labs(color = "Temperature \n difference", y = "Surface Temperature (Celcius)") + 
+  facet_wrap(~ Country.Name, scales = "free_y") +
+  ggtitle("Relationship between surface temperature and temperature difference") +
+  theme_classic()
+p2
+
+ggsave(filename = paste0(getwd(), "/plots/tempdiff_scatter.tiff"), 
+       plot = p2, 
+       width = 8, 
+       height = 6, 
+       units = "in")
+```
+
+## Other indicators visualization
+### Country's contribution to emissions and energy usage
+```{r}
+cbp1 <- c("#999999", "#E69F00", "#56B4E9", "#009E73",
+          "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+p3 <- ggplot(wide2, aes(x = year, y = EN.ATM.CO2E.KT, fill = Country.Name)) + 
+  geom_area() + 
+  labs(fill = "Country", y = "CO2 emissions (kt)") +
+  scale_fill_manual(values = cbp1) + 
+  ggtitle("CO2 emissions by country") +
+  theme_classic()
+p3
+
+ggsave(filename = paste0(getwd(), "/plots/CO2_time_fill.tiff"), 
+       plot = p3, 
+       width = 6, 
+       height = 4, 
+       units = "in")
+```
+
+### Relationship between indicator and temp diff
+```{r}
+vars <- c("EN.ATM.CO2E.KT_log", "EG.USE.PCAP.KG.OE_log")
+names <- c("CO2", "PCAP")
+
+for(i in 1:length(vars)) {
+  p4 <- ggplot(data = wide2, mapping = aes_string(x = "year", y = vars[i])) +
+    geom_line() +
+    geom_point(mapping = aes(color = temp.diff)) + 
+    scale_color_gradient(low = "blue", high = "red") +
+    labs(color = "Temperature \n difference", y = names[i]) + 
+    facet_wrap(~ Country.Name, scales = "free_y") +
+    ggtitle(paste0("Relationship between ", names[i], " and temperature difference")) +
+    theme_classic()
+  print(p4)
+  
+  ggsave(filename = paste0(getwd(), "/plots/", names[i], "tempdiff_scatter.tiff"), 
+       plot = p4, 
+       width = 8, 
+       height = 5, 
+       units = "in")
+}
+```
