@@ -1,0 +1,384 @@
+---
+title: "Modeling and Variable Selection"
+author: "Jessica, Ruchira, Neehaar"
+date: "10/31/2020"
+output: html_document
+---
+
+```{r}
+# Loading in and transforming the data
+
+# Description: this file examines the cleaned data in more detail to determine
+# which variables should be transformed, etc.
+
+library(e1071)
+library(MASS)
+library(GGally)
+library(tidyverse)
+library(caret)
+library(leaps)
+library(plm)
+library(corrplot)
+
+### Section 1: Read in the data
+# Countries of interest
+countries <- c("Brazil", "China", "Germany", "India", "UK", "US", "world")
+
+# Variables we selected to narrow down
+vars <- c("year",
+          "TEMP.YEARLY",
+          "SP.DYN.LE00.FE.IN", 
+          "SP.DYN.LE00.MA.IN",
+          "SL.UEM.TOTL.ZS",
+          "EN.POP.DNST",
+          "SP.POP.GROW",
+          "SP.URB.TOTL.IN.ZS",
+          "AG.SRF.TOTL.K2",
+          "AG.PRD.LVSK.XD",
+          "AG.LND.AGRI.ZS",
+          "EN.ATM.CO2E.KT",
+          "EG.USE.COMM.CL.ZS",
+          "EG.USE.PCAP.KG.OE",
+          "EG.FEC.RNEW.ZS")
+
+### Section 2: aggregate country level data together
+# Combine all of the country level dataframe together
+x <- c()
+for (i in 1:(length(countries)-1)) {
+  temp <- read.csv(paste0(getwd(), 
+                          "/final/", 
+                          countries[i], 
+                          "_data_wide.csv"), 
+                   stringsAsFactors = FALSE)
+  names(temp) <- gsub("value.", "", names(temp))
+  temp <- temp[, names(temp) %in% vars]
+  temp$Country.Name <- countries[i]
+  x <- rbind(x, temp)
+}
+
+### Section 3: Data transformation
+# Plot histograms of each variables and transformed variables
+# Also plot skewness of data
+# Transforms used:
+#   - No transform: x
+#   - log: ln(x)
+#   - square root: sqrt(x)
+#   - squared: x^2
+#   - z-standardized: (x-mean(x)) / sd(x)
+#   - max-min: (x - min(x)) / (max(x) - min(x))
+pdf("world_plots.pdf", width = 9, height = 6)
+for(j in 3:ncol(x)-1) {
+  par(mfrow = c(2, 3))
+  nm <- names(x)[j]
+  
+  temp <- x[, j] 
+  hist(temp, 
+       main = paste0(nm, "\n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+  
+  temp <- log(x[, j][x[, j] > 0]) 
+  hist(temp, 
+       main = paste0("ln(", nm, ") \n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+  
+  temp <- sqrt(x[, j][x[, j] > 0]) 
+  hist(temp, 
+       main = paste0("sqrt(", nm, ") \n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+  
+  temp <- x[, j]^2 
+  hist(temp, 
+       main = paste0(nm, "^2 \n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+  
+  temp <- scale(x[, j]) 
+  hist(temp, 
+       main = paste0("z-scale", nm, "\n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+  
+  temp <- (x[, j] - min(x[, j]))/(max(x[, j] - min(x[, j]))) 
+  hist(temp, 
+       main = paste0("max-min", nm, "\n skew=", as.character(skewness(temp))), 
+       freq = FALSE)
+  lines(density(temp))
+}
+
+# Look at the difference between the temperature in year t and the temperature
+# in 1991. This is a better metric for climate change because it tracks the 
+# change in temperature and subtracts out the baseline temp
+y <- c()
+for(i in 1:(length(countries)-1)) {
+  temp <- x$TEMP.YEARLY[x$Country.Name == countries[i]]
+  y <- c(y, temp - temp[1])
+}
+x$temp.diff <- y
+
+# Repeat the same set of plots for this variable
+par(mfrow = c(2, 3))
+
+temp <- y
+hist(temp, 
+     main = paste0("Temp diff \n skew=", as.character(skewness(temp))), 
+     freq = FALSE)
+lines(density(temp))
+
+temp <- log(y[y > 0]) 
+hist(temp, 
+     main = paste0("log(Temp diff) \n skew=", as.character(skewness(temp))), 
+freq = FALSE)
+lines(density(temp))
+
+temp <- sqrt(y[y > 0]) 
+hist(temp, 
+     main = paste0("sqrt( Temp diff) \n skew=", as.character(skewness(temp))), 
+     freq = FALSE)
+lines(density(temp))
+
+temp <- y^2 
+hist(temp, main = paste0("Temp diff^2, \n skew=", as.character(skewness(temp))), 
+     freq = FALSE)
+lines(density(temp))
+
+temp <- scale(y) 
+hist(temp, 
+     main = paste0("z-scale Temp diff \n skew=", as.character(skewness(temp))), 
+     freq = FALSE)
+lines(density(temp))
+
+temp <- (y - min(y))/(max(y) - min(y)) 
+hist(temp, 
+     main = paste0("max-min Temp diff \n skew=", as.character(skewness(temp))), 
+     freq = FALSE)
+lines(density(temp))
+dev.off()
+
+# Based on the plots, try transforming the following variables
+x$SP.DYN.LE00.FE.IN_sq <- x$SP.DYN.LE00.FE.IN^2
+x$SP.DYN.LE00.MA.IN_sq <- x$SP.DYN.LE00.MA.IN^2
+x$SL.UEM.TOTL.ZS_sqrt <- sqrt(x$SL.UEM.TOTL.ZS)
+x$EN.POP.DNST_sqrt <- sqrt(x$EN.POP.DNST)
+x$SP.URB.TOTL.IN.ZS_sq <- x$SP.URB.TOTL.IN.ZS^2
+x$AG.PRD.LVSK.XD_sq <- x$AG.PRD.LVSK.XD^2
+x$EN.ATM.CO2E.KT_log <- log(x$EN.ATM.CO2E.KT)
+x$EG.USE.COMM.CL.ZS_sq <- x$EG.USE.COMM.CL.ZS^2
+x$EG.USE.PCAP.KG.OE_log <- log(x$EG.USE.PCAP.KG.OE)
+x$EG.FEC.RNEW.ZS_sq <- sqrt(x$EG.FEC.RNEW.ZS)
+
+### Section 4: Correlated variables
+# There are too many variables to do a proper pairs plot
+# Instead, iterate and put each plot in a pdf
+transformed <- c("SP.DYN.LE00.FE.IN",
+                 "SP.DYN.LE00.MA.IN",
+                 "SL.UEM.TOTL.ZS",
+                 "EN.POP.DNST",
+                 "SP.URB.TOTL.IN.ZS",
+                 "AG.PRD.LVSK.XD",
+                 "EN.ATM.CO2E.KT",
+                 "EG.USE.COMM.CL.ZS",
+                 "EG.USE.PCAP.KG.OE",
+                 "EG.FEC.RNEW.ZS")
+# Subset the data to only contain the transformed variables
+xx <- x[, !(names(x) %in% transformed)]
+xx$Country.Name <- as.factor(xx$Country.Name)
+
+varpairs <- combn(names(xx), 2)
+pdf("pairsplot", width = 5, height = 5)
+for(i in 1:ncol(varpairs)) {
+  plot(xx[, varpairs[1, i]], xx[, varpairs[2, i]], 
+       xlab = varpairs[1, i], ylab = varpairs[2, i], 
+       main = paste0(varpairs[2, i], " vs. ", varpairs[1, i]))  
+}
+dev.off()
+```
+
+```{r}
+# Modeling 
+
+# Store the transformed information
+transformed_world_dat <- xx
+head(transformed_world_dat)
+
+# Modeling the aggregated country level data to determine significant predictors
+temp.yearly.model <- lm(TEMP.YEARLY ~ . - temp.diff, 
+                        data = transformed_world_dat)
+temp.yearly.model.step <- stepAIC(temp.yearly.model, direction = "both")
+summary(temp.yearly.model.step)
+
+# Predict the temperatures based off the significant predictors
+
+# Create Training and Test data
+# Setting seed to reproduce results of random sampling
+set.seed(100)  
+trainingRowIndex <- sample(1:nrow(transformed_world_dat), 
+                           0.8*nrow(transformed_world_dat)) 
+trainingData <- transformed_world_dat[trainingRowIndex, ]  
+testData <- transformed_world_dat[-trainingRowIndex, ]   
+
+# Predictions for average temperature based on significant predictors found above 
+lmMod.aggregated <- lm(TEMP.YEARLY ~ year + SP.POP.GROW + AG.SRF.TOTL.K2 
+                       + AG.LND.AGRI.ZS + Country.Name + EN.ATM.CO2E.KT_log 
+                       + EG.USE.COMM.CL.ZS_sq + EG.FEC.RNEW.ZS_sq, 
+                     data = trainingData)
+predictions <- predict(lmMod.aggregated, testData)
+actuals_preds <- data.frame(cbind(actuals = testData$TEMP.YEARLY, 
+                                  predicteds=predictions))
+
+# Calculate accuracy
+min_max_accuracy <- mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, 
+                                                              max))
+print(paste("The Min/Max Accuracy of the Predictions for Average Yearly Temperature is:", round(min_max_accuracy,3)))
+
+# Repeat the above for temperature anomalies
+temp.diff.model <- lm(temp.diff ~ . - TEMP.YEARLY, data = transformed_world_dat)
+# Run stepwise regression in order to find the best predictors
+temp.diff.model.step <- stepAIC(temp.diff.model, direction = "both")
+summary(temp.diff.model.step)
+# Significant predictors for yearly temperature are country, year, surface area 
+# (sq km), atmospheric CO2, and renewable energy consumption 
+
+# Predictions for average temperature based on significant predictors found above 
+lmMod.aggregated.anom <- lm(temp.diff ~ year + AG.SRF.TOTL.K2 + AG.LND.AGRI.ZS 
+                            + Country.Name + EN.ATM.CO2E.KT_log 
+                            + EG.USE.COMM.CL.ZS_sq + EG.FEC.RNEW.ZS_sq, 
+                     data = trainingData)
+predictions <- predict(lmMod.aggregated.anom, testData)
+
+actuals_preds <- data.frame(cbind(actuals = testData$temp.diff, 
+                                  predicteds=predictions))
+# Remove rows that cause div/0 error 
+actuals_preds <- actuals_preds[-c(22:24,27),]
+actuals_preds
+# Calculate accuracy
+min_max_accuracy <- mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, 
+                                                              max))
+
+print(paste("The Min/Max Accuracy of the Predictions for Average Yearly Temperature is:", round(min_max_accuracy,3)))
+```
+*We see that the significant predictors in the aggregated country level data are population growth, country, and temperature differential. This is particularly interesting, as it differs from the world data *
+
+```{r}
+# Now we will compare the above model with our aggregated information to world
+# bank data aggregated world information
+wb_data_long <- read.csv("data_long.csv", stringsAsFactors = FALSE)
+
+# Remove duplicate rows 
+wb_data_long <- wb_data_long[which(!duplicated(wb_data_long[, 1:4])), ]
+
+# Remove all the NA rows
+wb_data_long <- wb_data_long[!is.na(wb_data_long$value),]
+
+# Subset to only include information up until 2017
+wb_data_long <- wb_data_long[!wb_data_long$year > 2017,]
+
+# Extract only the world information
+world_data <- wb_data_long[wb_data_long$Country.Name == "World",]
+
+# Remove the country name and country code as this is irrelevant information in 
+# this subsetted data 
+world_data <- world_data[,-c(1,3,4)]
+
+# Make the information in wide format so it is easier to model 
+world_data_wide <- reshape(world_data, 
+                        idvar = "year", 
+                        timevar = "Series.Code", 
+                        direction = "wide")
+
+# Transform the data like above
+world_data_wide$value.SP.DYN.LE00.FE.IN <- world_data_wide$value.SP.DYN.LE00.FE.IN^2
+world_data_wide$value.SP.DYN.LE00.MA.IN <- world_data_wide$value.SP.DYN.LE00.MA.IN^2
+world_data_wide$value.SL.UEM.TOTL.ZS <- sqrt(world_data_wide$value.SL.UEM.TOTL.ZS)
+world_data_wide$value.EN.POP.DNST <- sqrt(world_data_wide$value.EN.POP.DNST)
+world_data_wide$value.SP.URB.TOTL.IN.ZS <- world_data_wide$value.SP.URB.TOTL.IN.ZS^2
+world_data_wide$value.AG.PRD.LVSK.XD <- world_data_wide$value.AG.PRD.LVSK.XD^2
+world_data_wide$value.EN.ATM.CO2E.KT <- log(world_data_wide$value.EN.ATM.CO2E.KT)
+world_data_wide$value.EG.USE.COMM.CL.ZS <- world_data_wide$value.EG.USE.COMM.CL.ZS^2
+world_data_wide$value.EG.USE.PCAP.KG.OE <- log(world_data_wide$value.EG.USE.PCAP.KG.OE)
+world_data_wide$value.EG.FEC.RNEW.ZS <- sqrt(world_data_wide$value.EG.FEC.RNEW.ZS)
+
+vars <- c("year",
+          "value.WLD.AVG.TEMP.YEARLY",
+          "value.WLD.TEMP.ANOMALY",
+          "value.SP.DYN.LE00.FE.IN", 
+          "value.SP.DYN.LE00.MA.IN",
+          "value.SL.UEM.TOTL.ZS",
+          "value.EN.POP.DNST",
+          "value.SP.POP.GROW",
+          "value.SP.URB.TOTL.IN.ZS",
+          "value.AG.SRF.TOTL.K2",
+          "value.AG.PRD.LVSK.XD",
+          "value.AG.LND.AGRI.ZS",
+          "value.EN.ATM.CO2E.KT",
+          "value.EG.USE.COMM.CL.ZS",
+          "value.EG.USE.PCAP.KG.OE",
+          "value.EG.FEC.RNEW.ZS")
+
+# Maintain only those columns
+world_data_wide <- world_data_wide[,vars]
+
+# Take complete cases for linear regression
+world_data_wide <- world_data_wide[complete.cases(world_data_wide),]
+
+# Fit the models and determine significant predictors using stepwise selection 
+# methods 
+wld.temp.model <- lm(value.WLD.AVG.TEMP.YEARLY ~. - value.WLD.TEMP.ANOMALY, 
+                     data = world_data_wide)
+
+# Stepwise regression for variable selection
+wld.temp.model.step <- stepAIC(wld.temp.model, direction = "both")
+summary(wld.temp.model.step)
+# Significant predictors for Avg World Temperature are population density, and
+# atmospheric CO2 emissions (in kT)
+
+# Predict the temperatures based off the significant predictors
+
+# Create Training and Test data
+# Setting seed to reproduce results of random sampling
+set.seed(100)  
+trainingRowIndex <- sample(1:nrow(world_data_wide), 0.8*nrow(world_data_wide)) 
+trainingData <- world_data_wide[trainingRowIndex, ]  
+testData <- world_data_wide[-trainingRowIndex, ]   
+
+# Predictions for average temperature based on significant predictors found above 
+lmMod.wld.temp <- lm(value.WLD.AVG.TEMP.YEARLY ~ value.EN.POP.DNST 
+                     + value.EN.ATM.CO2E.KT 
+                     + value.EG.FEC.RNEW.ZS, data = trainingData)
+predictions <- predict(lmMod.wld.temp, testData)
+
+actuals_preds <- data.frame(cbind(actuals = testData$value.WLD.AVG.TEMP.YEARLY, predicteds=predictions))
+
+# Calculate accuracy
+min_max_accuracy <- mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, 
+                                                              max))
+print(paste("The Min/Max Accuracy of the Predictions for Average Yearly Temperature is:", round(min_max_accuracy,3)))
+
+# Repeat the above for temperature anomaly
+
+# First find the significant predictors 
+wld.temp.anom.model <- lm(value.WLD.TEMP.ANOMALY ~. - value.WLD.AVG.TEMP.YEARLY, 
+                          data=world_data_wide)
+wld.temp.anom.model.step <- stepAIC(wld.temp.anom.model, direction = "both")
+summary(wld.temp.anom.model.step)
+# Significant predictors for Avg World Temperature anomaly are population
+# density, population growth, and agricultural production of livestock
+# Run the predictions
+lmMod.wld.temp.anom <- lm(value.WLD.TEMP.ANOMALY ~ value.EN.POP.DNST 
+                     + value.SP.POP.GROW
+                     + value.AG.PRD.LVSK.XD, 
+                     data = trainingData.temp.yearly)
+predictions <- predict(lmMod.wld.temp.anom, testData)
+
+actuals_preds <- data.frame(cbind(actuals = 
+                                    testData$value.WLD.TEMP.ANOMALY, predicteds=predictions))
+
+# Calculate accuracy
+min_max_accuracy <- mean(apply(actuals_preds, 1, min) / apply(actuals_preds, 1, 
+                                                              max))
+print(paste("The Min/Max Accuracy of the Predictions for Average Yearly Temperature Anomaly is:", round(min_max_accuracy,3)))
+```
+
+
